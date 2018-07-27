@@ -14,6 +14,7 @@
 double wtime(void);
 void* recalloc(void* p, size_t old_size, size_t new_size);
 double hr_bytes(size_t bytes, char* symbol);
+double hr_seconds(double seconds, char* symbol);
 uint32_t rand32(void);
 uint64_t rand64(void);
 
@@ -175,8 +176,8 @@ int main(int argc, char** argv)
             test_time += wtime() - test_start;
 
             char symbol[8];
-            printf("%s: 0x%zx\n", argv[c], (size_t) h);
-            printf("%zu bytes over %.2f s -> %.1f %sB/s\n", bytes, test_time, hr_bytes(bytes / test_time, symbol), symbol);
+            printf("%s [%s]: 0x%zx\n", argv[c], tests[i], (size_t) h);
+            printf("%zu bytes over %.2f %ss -> %.1f %sB/s\n", bytes, hr_seconds(test_time, symbol), symbol, hr_bytes(bytes / test_time, symbol + 2), symbol + 2);
             printf("\n");
         }
     }
@@ -225,7 +226,7 @@ int main(int argc, char** argv)
             } while (test_time < test_duration);
 
             char symbol[8];
-            printf("%s: %zu iterations over %.2f s -> %.4f ns per operation\n", tests[i], test_cycles, test_time, test_time * 1E9 / test_cycles);
+            printf("%s: %zu iterations over %.2f %ss -> %.4f ns per operation\n", tests[i], test_cycles, hr_seconds(test_time, symbol), symbol, test_time * 1E9 / test_cycles);
             printf("%zu bytes over %.2f s -> %.1f %sB/s\n", bytes, test_time, hr_bytes(bytes / test_time, symbol), symbol);
             pairlist_stats(&list);
             printf("\n");
@@ -264,14 +265,27 @@ void* recalloc(void* p, size_t old_size, size_t new_size)
 // Print human readable form of bytes based on powers of 2
 double hr_bytes(size_t bytes, char* symbol)
 {
-    char symbols_base_2[7][3] = { "", "Ki", "Mi", "Gi", "Ti", "Pi", "Ei" };
+    char symbols[7][3] = { "", "Ki", "Mi", "Gi", "Ti", "Pi", "Ei" };
     unsigned char i = 0;
     size_t unit = 1 << 10;
 
     for (; i < 7 && bytes >= unit; i++, unit <<= 10);
-    strcpy(symbol, symbols_base_2[i]);
+    strcpy(symbol, symbols[i]);
 
     return (double) bytes / (unit >> 10);
+}
+
+// Print human readable form of seconds based on powers of 10
+double hr_seconds(double seconds, char* symbol)
+{
+    char symbols[7][2] = { "", "m", "u", "n", "p", "f", "a" };
+    unsigned char i = 0;
+    double unit = 1;
+
+    for (; i < 7 && seconds * unit < 1; i++, unit *= 1000);
+    strcpy(symbol, symbols[i]);
+
+    return seconds * unit;
 }
 
 // Return 32-bit random number
