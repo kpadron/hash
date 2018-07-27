@@ -6,6 +6,9 @@
 #include <stdlib.h>
 #include <stdint.h>
 
+// Compute 32-bit hash of file's contents
+extern uint32_t hash_file(char* path, uint32_t (*hash)(void*, size_t));
+
 // Compute 32-bit FNV1A hash
 extern uint32_t hash_fnv1a(void* key, size_t length);
 

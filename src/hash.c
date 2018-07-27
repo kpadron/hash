@@ -6,11 +6,14 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
+#include <fcntl.h>
+#include <unistd.h>
 #include <assert.h>
 
 #include "hash.h"
 
 #define HASH_SEED 0x7FFF2FF8
+#define HASH_BLOCK_SIZE (1 << 20)
 
 #define MIN(x, y) ((x) < (y) ? (x) : (y))
 #define MAX(x, y) ((x) > (y) ? (x) : (y))
@@ -66,6 +69,44 @@ static inline uint64_t _read64(void* p)
     return _lsb() ? x : _swap64(x);
 }
 
+static inline size_t _filesize(char* path)
+{
+    FILE* f = fopen(path, "rb");
+    fseek(f, 0, SEEK_END);
+    size_t size = ftell(f);
+    fclose(f);
+    return size;
+}
+
+
+// Compute 32-bit hash of files contents
+uint32_t hash_file(char* path, uint32_t (*hash)(void*, size_t))
+{
+    uint32_t h = 0;
+    size_t length = _filesize(path);
+    hash = hash ? hash : hash_murmur3;
+
+    int fd = open(path, O_RDONLY);
+    void* buffer = malloc(HASH_BLOCK_SIZE);
+
+    while (length)
+    {
+        size_t read_size = HASH_BLOCK_SIZE;
+        if (length < read_size) read_size = length;
+
+        read(fd, buffer, read_size);
+
+        h ^= hash(buffer, read_size);
+
+        length -= read_size;
+    }
+
+    free(buffer);
+    close(fd);
+
+    return h;
+}
+
 
 // Compute 32-bit FNV1A hash
 uint32_t hash_fnv1a(void* key, size_t length)
@@ -116,12 +157,12 @@ uint32_t hash_murmur3s(void* key, size_t length, uint32_t seed)
     uint8_t* k = (uint8_t*) key;
     uint32_t h = seed;
 
-    int nblocks = length >> 2;
-    uint32_t* blocks = (uint32_t*) (k + (nblocks >> 2));
+    size_t nblocks = length / 4;
+    uint8_t* tail = k + nblocks * 4;
 
-    for (int i = -nblocks; i; i++)
+    while (k < tail)
     {
-        uint32_t k1 = _read32(&blocks[i]);
+        uint32_t k1 = _read32(k); k += 4;
 
         k1 *= c1;
         k1 = _rotl32(k1, 15);
@@ -132,7 +173,6 @@ uint32_t hash_murmur3s(void* key, size_t length, uint32_t seed)
         h = h * 5 + 0xE6546B64;
     }
 
-    uint8_t* tail = (uint8_t*)(k + (nblocks >> 2));
     uint32_t k1 = 0;
 
     switch (length & 3)
@@ -140,11 +180,10 @@ uint32_t hash_murmur3s(void* key, size_t length, uint32_t seed)
         case 3: k1 ^= tail[2] << 16;
         case 2: k1 ^= tail[1] << 8;
         case 1: k1 ^= tail[0];
-
-        k1 *= c1;
-        k1 = _rotl32(k1, 15);
-        k1 *= c2;
-        h ^= k1;
+                k1 *= c1;
+                k1 = _rotl32(k1, 15);
+                k1 *= c2;
+                h ^= k1;
     }
 
     h ^= (uint32_t) length;

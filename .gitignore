@@ -29,6 +29,8 @@
 *.dylib
 
 # Executables
+hash-test
+hash-table-test
 *.exe
 *.out
 *.app

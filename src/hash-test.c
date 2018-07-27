@@ -12,14 +12,22 @@
 #include "hash.h"
 
 double wtime(void);
+void* recalloc(void* p, size_t old_size, size_t new_size);
+double hr_bytes(size_t bytes, char* symbol);
 uint32_t rand32(void);
 uint64_t rand64(void);
 
+typedef struct node
+{
+    void* key;
+    struct node* next;
+} node_t;
+
 typedef struct
 {
-    char* key;
-    void* data;
-    uint8_t flag;
+    uint32_t hash;
+    uint64_t count;
+    node_t* list;
 } pair_t;
 
 typedef struct
@@ -29,128 +37,204 @@ typedef struct
     pair_t* array;
 } pairlist_t;
 
-void pairlist_insert(pairlist_t* list, char* key, void* data)
+// Return index to the position of entry with specified key O(log N)
+uint64_t pairlist_bsearch(pairlist_t* list, uint32_t hash)
 {
-    if (!list) return;
+    pair_t* sorted = list->array;
 
+    uint64_t l = 0;
+    uint64_t u = list->count;
+
+    // Perform a binary search by comparing to middle element
+    while (l < u)
+    {
+        // Update pivot index to be middle of the range
+        uint64_t p = l + ((u - l) >> 1);
+
+        // Use lower half as new range
+        if (hash < sorted[p].hash) u = p;
+        // Use upper half as new range
+        else if (hash > sorted[p].hash) l = p + 1;
+        // Return matching pivot
+        else return p;
+    }
+
+    return l;
+}
+
+// Insert new entry into bucket in sorted order O(N)
+void pairlist_binsert(pairlist_t* list, uint32_t hash, void* key)
+{
+    // Expand bucket memory if necessary
     if (list->count == list->size || !list->array)
     {
         list->size <<= 1;
         list->array = (pair_t*) realloc(list->array, list->size * sizeof(pair_t));
     }
 
-    list->array[list->count].key = key;
-    list->array[list->count].data = data;
-    list->array[list->count++].flag = 0;
+    // Determine position to insert at O(log N)
+    uint64_t index = pairlist_bsearch(list, hash);
+    pair_t* array = list->array;
+
+    // Add new node to list for hash
+    // node_t* node = (node_t*) malloc(sizeof(node_t));
+    // node->key = key;
+    // node->next = array[index].list;
+
+    // Update existing entry (duplicates not allowed!)
+    if (index < list->count && hash == array[index].hash)
+    {
+        // array[index].list = node;
+        array[index].count++;
+    }
+    // Insert and shift entries into place O(N)
+    else if (index <= list->count)
+    {
+        memmove(&array[index + 1], &array[index], (list->count++ - index) * sizeof(pair_t));
+        array[index].hash = hash;
+        array[index].count = 1;
+        // array[index].list = node;
+    }
 }
 
-static inline size_t keysize(void* key)
+void pairlist_stats(pairlist_t* list)
 {
-    return strlen((char*) key);
+    if (!list) return;
+
+    uint64_t collisions = 0;
+
+    for (uint64_t i = 0; i < list->count; i++)
+    {
+        collisions += list->array[i].count - 1;
+    }
+
+    printf("collisions: %zu\n", (size_t) collisions);
 }
 
-static inline int keycmp(void* a, void* b)
+static inline size_t _filesize(char* path)
 {
-    return strcmp((char*) a, (char*) b);
+    FILE* f = fopen(path, "rb");
+    fseek(f, 0, SEEK_END);
+    size_t size = ftell(f);
+    fclose(f);
+    return size;
 }
+
 
 int main(int argc, char** argv)
 {
-    char* tests[] = { "hash_insert", "hash_search", "hash_remove" };
-
-    double test_duration = 5;
-
-    if (argc > 1)
-    {
-        test_duration = atof(argv[1]);
-    }
-
-    hash_t table;
+    char* tests[] = { "hash_fnv1a", "hash_oaat", "hash_murmur3", "hash_xxhash" };
 
     pairlist_t list;
     list.count = 0;
-    list.size = 10000;
+    list.size = 1024;
     list.array = NULL;
 
-    hash_init(&table, 10, keysize, keycmp);
-
     FILE* dict = fopen("words.txt", "r");
-
-    for (size_t i = 0; i < 3; i++)
+    if (!dict)
     {
-        double test_start = 0;
-        double test_time = 0;
-        size_t test_cycles = 0;
-
-        do
-        {
-            if (!strcmp(tests[i], "hash_insert"))
-            {
-                char str[256];
-                if (!fgets(str, 255, dict)) break;
-                str[strlen(str) - 1] = '\0';
-
-                if (!strcmp(str, "Z"))
-                {
-                    break;
-                }
-
-                void* d = strdup(str);
-                char* k = d;
-
-                pairlist_insert(&list, k, d);
-
-                test_start = wtime();
-                hash_insert(&table, d, d);
-                test_time += wtime() - test_start;
-            }
-            else if (!strcmp(tests[i], "hash_search"))
-            {
-                uint64_t index = rand64()%list.count;
-                char* k = list.array[index].key;
-                void* d = list.array[index].data;
-
-                test_start = wtime();
-                void* hd = hash_search(&table, k);
-                test_time += wtime() - test_start;
-
-                if (hd != d)
-                {
-                    assert(hd == d);
-                }
-            }
-            else if (!strcmp(tests[i], "hash_remove"))
-            {
-                uint64_t index = rand64()%list.count;
-                char* k = list.array[index].key;
-                void* d = list.array[index].data;
-                uint8_t f = list.array[index].flag;
-
-                test_start = wtime();
-                void* hd = hash_remove(&table, k);
-                test_time += wtime() - test_start;
-
-                if (!f)
-                {
-                    list.array[index].flag = 1;
-                    assert(hd == d);
-                }
-                else
-                {
-                    assert(hd == NULL);
-                }
-            }
-
-            test_cycles++;
-
-        } while (test_time < test_duration);
-
-        printf("%s: %zu iterations over %.2f s -> %.4f ns per operation\n", tests[i], test_cycles, test_time, test_time * 1E9 / test_cycles);
-        hash_print_stats(&table);
-        printf("\n");
+        perror("fopen");
+        exit(1);
     }
 
-    hash_free(&table);
+    // Fill dictionary with words
+    char** words = (char**) malloc(466544 * sizeof(char*));
+    for (size_t i = 0; i < 466544; i++)
+    {
+        char str[256];
+        fgets(str, 255, dict);
+        str[strlen(str) - 1] = '\0';
+        words[i] = strdup(str);
+    }
+
+    // Hash files from command line
+    for (int c = 1; c < argc; c++)
+    {
+        for (size_t i = 0; i < 4; i++)
+        {
+            double test_start = 0;
+            double test_time = 0;
+            size_t bytes = _filesize(argv[c]);
+
+            uint32_t (*hash)(void* key, size_t length);
+
+            if (!strcmp(tests[i], "hash_fnv1a"))
+                hash = hash_fnv1a;
+            else if (!strcmp(tests[i], "hash_oaat"))
+                hash = hash_oaat;
+            else if (!strcmp(tests[i], "hash_murmur3"))
+                hash = hash_murmur3;
+            else if (!strcmp(tests[i], "hash_xxhash"))
+                hash = hash_xxhash;
+            else
+                hash = NULL;
+
+
+            test_start = wtime();
+            uint32_t h = hash_file(argv[c], hash);
+            test_time += wtime() - test_start;
+
+            char symbol[8];
+            printf("%s: 0x%zx\n", argv[c], (size_t) h);
+            printf("%zu bytes over %.2f s -> %.1f %sB/s\n", bytes, test_time, hr_bytes(bytes / test_time, symbol), symbol);
+            printf("\n");
+        }
+    }
+
+    if (argc < 2)
+    {
+        for (size_t i = 0; i < 4; i++)
+        {
+            double test_duration = 5;
+            double test_start = 0;
+            double test_time = 0;
+            size_t test_cycles = 0;
+            size_t j = 0;
+            size_t bytes = 0;
+
+            uint32_t (*hash)(void* key, size_t length);
+
+            if (!strcmp(tests[i], "hash_fnv1a"))
+                hash = hash_fnv1a;
+            else if (!strcmp(tests[i], "hash_oaat"))
+                hash = hash_oaat;
+            else if (!strcmp(tests[i], "hash_murmur3"))
+                hash = hash_murmur3;
+            else if (!strcmp(tests[i], "hash_xxhash"))
+                hash = hash_xxhash;
+            else
+                hash = NULL;
+
+            do
+            {
+                // Generate hash
+                test_start = wtime();
+                uint32_t h = hash(words[j], strlen(words[j]));
+                test_time += wtime() - test_start;
+
+                bytes += strlen(words[j]);
+
+                // Add hash and key to list
+                pairlist_binsert(&list, h, words[j++]);
+
+                // Ran out of words
+                if (j == 466544) break;
+
+                test_cycles++;
+
+            } while (test_time < test_duration);
+
+            char symbol[8];
+            printf("%s: %zu iterations over %.2f s -> %.4f ns per operation\n", tests[i], test_cycles, test_time, test_time * 1E9 / test_cycles);
+            printf("%zu bytes over %.2f s -> %.1f %sB/s\n", bytes, test_time, hr_bytes(bytes / test_time, symbol), symbol);
+            pairlist_stats(&list);
+            printf("\n");
+
+            free(list.array);
+            list.array = NULL;
+            list.count = 0;
+        }
+    }
 
     return 0;
 }
@@ -164,6 +248,31 @@ double wtime(void)
     return (double)t.tv_sec + (double)t.tv_nsec / 1E9;
 }
 
+// realloc except new memory area is zeroed
+void* recalloc(void* p, size_t old_size, size_t new_size)
+{
+    p = realloc(p, new_size);
+
+    if (new_size > old_size)
+    {
+        memset((char*)p + old_size, 0, new_size - old_size);
+    }
+
+    return p;
+}
+
+// Print human readable form of bytes based on powers of 2
+double hr_bytes(size_t bytes, char* symbol)
+{
+    char symbols_base_2[7][3] = { "", "Ki", "Mi", "Gi", "Ti", "Pi", "Ei" };
+    unsigned char i = 0;
+    size_t unit = 1 << 10;
+
+    for (; i < 7 && bytes >= unit; i++, unit <<= 10);
+    strcpy(symbol, symbols_base_2[i]);
+
+    return (double) bytes / (unit >> 10);
+}
 
 // Return 32-bit random number
 uint32_t rand32(void)

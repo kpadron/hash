@@ -194,7 +194,7 @@ static void _hash_rehash(hash_t* table, uint32_t size)
     bucket_t* old_buckets = table->buckets;
     uint32_t old_size = table->size;
 
-    hash_init(table, size, table->keysize, table->keyhash, table->keycmp);
+    hash_init(table, size, table->keysize, table->keycmp, table->keyhash, table->hashmap);
 
     for (uint32_t i = 0; i < old_size; i++)
     {
