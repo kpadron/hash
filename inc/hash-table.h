@@ -1,7 +1,7 @@
 // hash-table.h
 // kpadron.github@gmail.com
 // Kristian Padron
-// hash table module
+// search optimized hash table module
 #pragma once
 #include <stdlib.h>
 #include <stdint.h>
@@ -13,8 +13,8 @@
 // Object representing a hash table entry
 typedef struct
 {
-    void* key;
-    void* data;
+    const void* key;
+    const void* data;
 } entry_t;
 
 // Object representing a hash table bucket chain
@@ -32,29 +32,29 @@ typedef struct
     uint32_t size;
     bucket_t* buckets;
 
-    size_t (*keysize)(void*);
-    int (*keycmp)(void*, void*);
-    uint32_t (*keyhash)(void*, size_t);
+    size_t (*keysize)(const void*);
+    int (*keycmp)(const void*, const void*);
+    uint32_t (*keyhash)(const void*, size_t);
     uint32_t (*hashmap)(uint32_t, uint32_t);
 } hash_t;
 
 // Initalize a hash table object
-extern void hash_init(hash_t* table, uint32_t size, size_t (*keysize)(void*), int (*keycmp)(void*, void*), uint32_t (*keyhash)(void*, size_t), uint32_t (*hashmap)(uint32_t, uint32_t));
+extern void hash_init(hash_t* table, uint32_t size, size_t (*keysize)(const void*), int (*keycmp)(const void*, const void*), uint32_t (*keyhash)(const void*, size_t), uint32_t (*hashmap)(uint32_t, uint32_t));
 
 // Cleanup and deallocate a hash table object
-extern void hash_free(hash_t* table, void (*keyfree)(void*), void (*datafree)(void*));
+extern void hash_free(hash_t* table, void (*keyfree)(const void*), void (*datafree)(const void*));
 
 // Insert new entry into hash table using specified key O(1)
-extern void hash_insert(hash_t* table, void* key, void* data);
+extern void hash_insert(hash_t* table, const void* key, const void* data);
 
 // Return data of the entry with specified key O(1)
-extern void* hash_search(hash_t* table, void* key);
+extern void* hash_search(const hash_t* table, const void* key);
 
 // Remove entry with specified key returning data O(1)
-extern void* hash_remove(hash_t* table, void* key);
+extern void* hash_remove(hash_t* table, const void* key);
 
 // Print table statistics
-extern void hash_print_stats(hash_t* table);
+extern void hash_print_stats(const hash_t* table);
 
 // Debug print used to visualize hash table
-extern void hash_print_debug(hash_t* table);
+extern void hash_print_debug(const hash_t* table);

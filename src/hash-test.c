@@ -124,29 +124,7 @@ static inline size_t _filesize(char* path)
 
 int main(int argc, char** argv)
 {
-    char* tests[] = { "hash_fnv1a", "hash_oaat", "hash_murmur3", "hash_xxhash" };
-
-    pairlist_t list;
-    list.count = 0;
-    list.size = 1024;
-    list.array = NULL;
-
-    FILE* dict = fopen("words.txt", "r");
-    if (!dict)
-    {
-        perror("fopen");
-        exit(1);
-    }
-
-    // Fill dictionary with words
-    char** words = (char**) malloc(466544 * sizeof(char*));
-    for (size_t i = 0; i < 466544; i++)
-    {
-        char str[256];
-        fgets(str, 255, dict);
-        str[strlen(str) - 1] = '\0';
-        words[i] = strdup(str);
-    }
+    const char* tests[] = { "hash_fnv1a", "hash_oaat", "hash_murmur3", "hash_xxhash" };
 
     // Hash files from command line
     for (int c = 1; c < argc; c++)
@@ -157,7 +135,7 @@ int main(int argc, char** argv)
             double test_time = 0;
             size_t bytes = _filesize(argv[c]);
 
-            uint32_t (*hash)(void* key, size_t length);
+            uint32_t (*hash)(const void* key, size_t length);
 
             if (!strcmp(tests[i], "hash_fnv1a"))
                 hash = hash_fnv1a;
@@ -184,6 +162,28 @@ int main(int argc, char** argv)
 
     if (argc < 2)
     {
+        pairlist_t list;
+        list.count = 0;
+        list.size = 1024;
+        list.array = NULL;
+
+        FILE *dict = fopen("words.txt", "r");
+        if (!dict)
+        {
+            perror("fopen");
+            exit(1);
+        }
+
+        // Fill dictionary with words
+        char **words = (char **) malloc(466544 * sizeof(char *));
+        for (size_t i = 0; i < 466544; i++)
+        {
+            char str[256];
+            fgets(str, 255, dict);
+            str[strlen(str) - 1] = '\0';
+            words[i] = strdup(str);
+        }
+
         for (size_t i = 0; i < 4; i++)
         {
             double test_duration = 5;
@@ -193,7 +193,7 @@ int main(int argc, char** argv)
             size_t j = 0;
             size_t bytes = 0;
 
-            uint32_t (*hash)(void* key, size_t length);
+            uint32_t (*hash)(const void* key, size_t length);
 
             if (!strcmp(tests[i], "hash_fnv1a"))
                 hash = hash_fnv1a;

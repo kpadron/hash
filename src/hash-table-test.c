@@ -45,14 +45,14 @@ void pairlist_insert(pairlist_t* list, char* key, void* data)
     list->array[list->count++].flag = 0;
 }
 
-static inline size_t keysize(void* key)
+static inline size_t keysize(const void* key)
 {
-    return strlen((char*) key);
+    return strlen((const char*) key);
 }
 
-static inline int keycmp(void* a, void* b)
+static inline int keycmp(const void* a, const void* b)
 {
-    return strcmp((char*) a, (char*) b);
+    return strcmp((const char*) a, (const char*) b);
 }
 
 int main(int argc, char** argv)

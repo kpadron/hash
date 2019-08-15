@@ -3,8 +3,10 @@
 # Kristian Padron
 CC := gcc
 
-CFLAGS := -Wall -Wextra
+CFLAGS := -Wall
 DEBUG := -g -Og
+OPT := -Ofast
+MODE := $(OPT)
 
 INC := -I inc
 VPATH := src
@@ -16,16 +18,16 @@ BINS := hash-test hash-table-test
 all: $(BINS)
 
 hash-test: hash-test.c hash.o
-	$(CC) $(CFLAGS) $(DEBUG) -o $@ $^ $(INC)
+	$(CC) $(CFLAGS) $(MODE) -o $@ $^ $(INC)
 
 hash-table-test: hash-table-test.c hash.o hash-table.o
-	$(CC) $(CFLAGS) $(DEBUG) -o $@ $^ $(INC)
+	$(CC) $(CFLAGS) $(MODE) -o $@ $^ $(INC)
 
 %.o: %.c
-	$(CC) $(CFLAGS) $(DEBUG) -c -o $@ $< $(INC)
+	$(CC) $(CFLAGS) $(MODE) -c -o $@ $< $(INC)
 
 %: %.c
-	$(CC) $(CFLAGS) $(DEBUG) -o $@ $<
+	$(CC) $(CFLAGS) $(MODE) -o $@ $<
 
 r: clean all
 

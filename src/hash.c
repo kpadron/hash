@@ -12,7 +12,7 @@
 
 #include "hash.h"
 
-#define HASH_SEED 0x7FFF2FF8
+#define HASH_SEED (uint32_t) 0xDEADBEEF
 #define HASH_BLOCK_SIZE (1 << 20)
 
 #define MIN(x, y) ((x) < (y) ? (x) : (y))
@@ -54,47 +54,46 @@ static inline uint64_t _swap64(uint64_t x)
            ((x >> 56) & 0x00000000000000FFULL);
 }
 
-static inline uint32_t _read32(void* p)
+static inline uint32_t _read32(const void* p)
 {
     uint32_t x;
-    memcpy(&x, p, sizeof(uint32_t));
-
+    memcpy(&x, p, sizeof(x));
     return _lsb() ? x : _swap32(x);
 }
 
-static inline uint64_t _read64(void* p)
+static inline uint64_t _read64(const void* p)
 {
     uint64_t x;
-    memcpy(&x, p, sizeof(uint64_t));
+    memcpy(&x, p, sizeof(x));
     return _lsb() ? x : _swap64(x);
 }
 
-static inline size_t _filesize(char* path)
+static inline size_t _filesize(const char* path)
 {
     FILE* f = fopen(path, "rb");
     fseek(f, 0, SEEK_END);
-    size_t size = ftell(f);
+    const size_t size = ftell(f);
     fclose(f);
     return size;
 }
 
 
 // Compute 32-bit hash of files contents
-uint32_t hash_file(char* path, uint32_t (*hash)(void*, size_t))
+uint32_t hash_file(const char* path, uint32_t (*hash)(const void*, size_t))
 {
     uint32_t h = 0;
     size_t length = _filesize(path);
     hash = hash ? hash : hash_murmur3;
 
-    int fd = open(path, O_RDONLY);
-    void* buffer = malloc(HASH_BLOCK_SIZE);
+    const int fd = open(path, O_RDONLY);
+    uint8_t* const buffer = (uint8_t*) malloc(HASH_BLOCK_SIZE);
 
-    while (length)
+    ssize_t status = 1;
+    while (length && status > 0)
     {
-        size_t read_size = HASH_BLOCK_SIZE;
-        if (length < read_size) read_size = length;
+        const size_t read_size = MIN(length, HASH_BLOCK_SIZE);
 
-        read(fd, buffer, read_size);
+        status = read(fd, buffer, read_size);
 
         h ^= hash(buffer, read_size);
 
@@ -109,9 +108,9 @@ uint32_t hash_file(char* path, uint32_t (*hash)(void*, size_t))
 
 
 // Compute 32-bit FNV1A hash
-uint32_t hash_fnv1a(void* key, size_t length)
+uint32_t hash_fnv1a(const void* key, size_t length)
 {
-    uint8_t* k = (uint8_t*) key;
+    const uint8_t* k = (const uint8_t*) key;
     uint32_t h = 2166136261;
 
     for (size_t i = 0; i < length; i++)
@@ -123,9 +122,9 @@ uint32_t hash_fnv1a(void* key, size_t length)
 }
 
 // Compute 32-bit jenkins one-at-a-time hash
-uint32_t hash_oaat(void* key, size_t length)
+uint32_t hash_oaat(const void* key, size_t length)
 {
-    uint8_t* k = (uint8_t*) key;
+    const uint8_t* k = (const uint8_t*) key;
     uint32_t h = 0;
 
     for (size_t i = 0; i < length; i++)
@@ -143,22 +142,22 @@ uint32_t hash_oaat(void* key, size_t length)
 }
 
 // Compute 32-bit murmur3 hash with constant seed
-uint32_t hash_murmur3(void* key, size_t length)
+uint32_t hash_murmur3(const void* key, size_t length)
 {
     return hash_murmur3s(key, length, HASH_SEED);
 }
 
 // Compute 32-bit murmur3 hash with seed
-uint32_t hash_murmur3s(void* key, size_t length, uint32_t seed)
+uint32_t hash_murmur3s(const void* key, size_t length, uint32_t seed)
 {
-    uint32_t c1 = 0xCC9E2D51;
-    uint32_t c2 = 0x1B873593;
+    static const uint32_t c1 = 0xCC9E2D51;
+    static const uint32_t c2 = 0x1B873593;
 
-    uint8_t* k = (uint8_t*) key;
+    const uint8_t* k = (const uint8_t*) key;
     uint32_t h = seed;
 
-    size_t nblocks = length / 4;
-    uint8_t* tail = k + nblocks * 4;
+    const size_t nblocks = length / 4;
+    const uint8_t* tail = k + nblocks * 4;
 
     while (k < tail)
     {
@@ -197,27 +196,27 @@ uint32_t hash_murmur3s(void* key, size_t length, uint32_t seed)
 }
 
 // Compute 32-bit xxHash with constant seed
-uint32_t hash_xxhash(void* key, size_t length)
+uint32_t hash_xxhash(const void* key, size_t length)
 {
     return hash_xxhashs(key, length, HASH_SEED);
 }
 
 // Compute 32-bit xxHash with seed
-uint32_t hash_xxhashs(void* key, size_t length, uint32_t seed)
+uint32_t hash_xxhashs(const void* key, size_t length, uint32_t seed)
 {
-    uint32_t p1 = 2654435761U;
-    uint32_t p2 = 2246822519U;
-    uint32_t p3 = 3266489917U;
-    uint32_t p4 =  668265265U;
-    uint32_t p5 =  374761393U;
+    static const uint32_t p1 = 2654435761U;
+    static const uint32_t p2 = 2246822519U;
+    static const uint32_t p3 = 3266489917U;
+    static const uint32_t p4 =  668265265U;
+    static const uint32_t p5 =  374761393U;
 
-    uint8_t* k = (uint8_t*) key;
+    const uint8_t* k = (const uint8_t*) key;
     uint32_t h = seed + p5;
-    uint8_t* end = k + length;
+    const uint8_t* end = k + length;
 
     if (length >= 16)
     {
-        uint8_t* limit = end - 15;
+        const uint8_t* limit = end - 15;
 
         uint32_t v1 = seed + p1 + p2;
         uint32_t v2 = seed + p2;
